@@ -47,7 +47,7 @@ export default {
 };
 
 async function getHomePage() {
-  return \`
+  return `
 <!DOCTYPE html>
 <html>
 <head><title>Proxy Browser</title></head>
@@ -66,5 +66,5 @@ async function getHomePage() {
   </script>
 </body>
 </html>
-\`;
+`;
 }
