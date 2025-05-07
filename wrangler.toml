@@ -1,6 +1,3 @@
 name = "cloudflare-proxy-browser"
-type = "javascript"
-
-account_id = ""
-workers_dev = true
+main = "index.js"
 compatibility_date = "2023-12-01"
