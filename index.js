@@ -23,18 +23,18 @@ export default {
           const base = new URL(target).origin;
 
           // Rewrite all links (href, src, etc.) to go through the proxy
-          html = html.replace(/(href|src)=["'](\\/[^"']*)["']/g, (match, attr, path) => {
+          html = html.replace(/(href|src)=["'](\/[^"']*)["']/g, (match, attr, path) => {
             return `${attr}="/proxy?url=${base}${path}"`;
           });
 
           // Rewrite other non-absolute paths (like "images/img.png") to go through the proxy
-          html = html.replace(/(href|src)=["'](?!https?:\\/\\/|\\/)([^"']+)["']/g, (match, attr, path) => {
+          html = html.replace(/(href|src)=["'](?!https?:\/\/|\/)([^"']+)["']/g, (match, attr, path) => {
             const resolved = new URL(path, target).toString();
             return `${attr}="/proxy?url=${resolved}"`;
           });
 
           // Rewrite absolute URLs
-          html = html.replace(/(src|href)=["'](https?:\\/\\/[^"']+)["']/g, (match, attr, url) => {
+          html = html.replace(/(src|href)=["'](https?:\/\/[^"']+)["']/g, (match, attr, url) => {
             return `${attr}="/proxy?url=${encodeURIComponent(url)}"`;
           });
 
