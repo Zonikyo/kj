@@ -22,12 +22,12 @@ export default {
           let html = await response.text();
           const base = new URL(target).origin;
 
-          // Rewrite relative paths (starting with /)
+          // Rewrite all links (href, src, etc.) to go through the proxy
           html = html.replace(/(href|src)=["'](\\/[^"']*)["']/g, (match, attr, path) => {
             return `${attr}="/proxy?url=${base}${path}"`;
           });
 
-          // Rewrite other non-absolute paths (like "images/img.png")
+          // Rewrite other non-absolute paths (like "images/img.png") to go through the proxy
           html = html.replace(/(href|src)=["'](?!https?:\\/\\/|\\/)([^"']+)["']/g, (match, attr, path) => {
             const resolved = new URL(path, target).toString();
             return `${attr}="/proxy?url=${resolved}"`;
@@ -36,6 +36,16 @@ export default {
           // Rewrite absolute URLs
           html = html.replace(/(src|href)=["'](https?:\\/\\/[^"']+)["']/g, (match, attr, url) => {
             return `${attr}="/proxy?url=${encodeURIComponent(url)}"`;
+          });
+
+          // Rewrite iframe src to proxy through the worker
+          html = html.replace(/<iframe[^>]*src=["'](https?:\/\/[^"']+)["'][^>]*>/g, (match, url) => {
+            return match.replace(url, `/proxy?url=${encodeURIComponent(url)}`);
+          });
+
+          // Rewrite links to go through the proxy
+          html = html.replace(/<a[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>/g, (match, url) => {
+            return match.replace(url, `/proxy?url=${encodeURIComponent(url)}`);
           });
 
           return new Response(html, {
