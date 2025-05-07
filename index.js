@@ -20,14 +20,24 @@ export default {
 
         if (contentType && contentType.includes("text/html")) {
           let html = await response.text();
-          html = html.replace(/(href|src)=["'](\/[^"']*)["']/g, (match, attr, path) => {
-            const base = new URL(target).origin;
-            return `${attr}="${base}${path}"`;
+          const base = new URL(target).origin;
+
+          // Rewrite relative paths (starting with /)
+          html = html.replace(/(href|src)=["'](\\/[^"']*)["']/g, (match, attr, path) => {
+            return `${attr}="/proxy?url=${base}${path}"`;
           });
-          html = html.replace(/(href|src)=["'](?!http)([^"']*)["']/g, (match, attr, path) => {
-            const base = new URL(target).origin + "/";
-            return `${attr}="${base}${path}"`;
+
+          // Rewrite other non-absolute paths (like "images/img.png")
+          html = html.replace(/(href|src)=["'](?!https?:\\/\\/|\\/)([^"']+)["']/g, (match, attr, path) => {
+            const resolved = new URL(path, target).toString();
+            return `${attr}="/proxy?url=${resolved}"`;
           });
+
+          // Rewrite absolute URLs
+          html = html.replace(/(src|href)=["'](https?:\\/\\/[^"']+)["']/g, (match, attr, url) => {
+            return `${attr}="/proxy?url=${encodeURIComponent(url)}"`;
+          });
+
           return new Response(html, {
             headers: { "Content-Type": "text/html" },
           });
