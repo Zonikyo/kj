@@ -18,19 +18,26 @@ export default {
         const fetchedResponse = await fetch(target);
         const contentType = fetchedResponse.headers.get("content-type") || "";
 
+        const headers = new Headers(fetchedResponse.headers);
+        headers.set("Access-Control-Allow-Origin", "*");
+
         if (contentType.includes("text/html")) {
-          let html = await fetchedResponse.text();
+          const reader = fetchedResponse.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+
+          let html = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            html += decoder.decode(value, { stream: true });
+          }
+
           const base = new URL(target).origin;
 
-          html = html.replace(/\b(href|src|action)=([\"'])(.*?)([\"'])/gi, (match, attr, quote1, val, quote2) => {
+          html = html.replace(/\b(href|src|action)=([\"'])(.*?)\2/gi, (match, attr, quote, val) => {
             if (val.startsWith("data:")) return match;
             const absolute = new URL(val, target).toString();
-            return `${attr}=${quote1}/proxy?url=${encodeURIComponent(absolute)}${quote2}`;
-          });
-
-          html = html.replace(/<iframe[^>]*src=(["'])(.*?)\1/gi, (match, quote, src) => {
-            const absolute = new URL(src, target).toString();
-            return match.replace(src, `/proxy?url=${encodeURIComponent(absolute)}`);
+            return `${attr}=${quote}/proxy?url=${encodeURIComponent(absolute)}${quote}`;
           });
 
           if (!/<base /i.test(html)) {
@@ -47,7 +54,7 @@ export default {
         }
 
         return new Response(fetchedResponse.body, {
-          headers: { "Content-Type": contentType },
+          headers
         });
       } catch (e) {
         return new Response(`Error: ${e.message}`, { status: 500 });
@@ -117,12 +124,7 @@ async function getHomePage() {
     let historyIndex = -1;
 
     function isURL(str) {
-      try {
-        const url = new URL(str);
-        return url.protocol.startsWith("http");
-      } catch {
-        return false;
-      }
+      try { new URL(str); return true; } catch { return false; }
     }
 
     function toURL(input) {
