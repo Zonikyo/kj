@@ -1,4 +1,3 @@
-// Cloudflare Worker entry point
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -23,17 +22,16 @@ export default {
           let html = await fetchedResponse.text();
           const base = new URL(target).origin;
 
-          // Rewrite all href/src/action attributes to go through the proxy
-          html = html.replace(/\b(href|src|action)=(["'])(.*?)\2/gi, (match, attr, quote, val) => {
+          html = html.replace(/\b(href|src|action)=([\"'])(.*?)\2/gi, (match, attr, quote, val) => {
             if (val.startsWith("data:")) return match;
             const absolute = new URL(val, target).toString();
             return `${attr}=${quote}/proxy?url=${encodeURIComponent(absolute)}${quote}`;
           });
 
-          // Inject base tag and meta charset if needed
           if (!/<base /i.test(html)) {
             html = html.replace(/<head.*?>/, (match) => `${match}<base href="${base}/">`);
           }
+
           if (!/<meta charset/i.test(html)) {
             html = html.replace(/<head.*?>/, (match) => `${match}<meta charset="UTF-8">`);
           }
@@ -119,12 +117,12 @@ async function getHomePage() {
 
     function toURL(input) {
       if (isURL(input)) return input;
-      return `https://duckduckgo.com/?q=${encodeURIComponent(input)}`;
+      return "https://duckduckgo.com/?q=" + encodeURIComponent(input);
     }
 
     function goTo(input) {
       const url = toURL(input);
-      const proxied = `/proxy?url=${encodeURIComponent(url)}`;
+      const proxied = "/proxy?url=" + encodeURIComponent(url);
       frame.src = proxied;
       historyStack.splice(historyIndex + 1);
       historyStack.push(url);
@@ -137,7 +135,7 @@ async function getHomePage() {
       if (historyIndex > 0) {
         historyIndex--;
         const url = historyStack[historyIndex];
-        frame.src = `/proxy?url=${encodeURIComponent(url)}`;
+        frame.src = "/proxy?url=" + encodeURIComponent(url);
         urlBar.value = url;
       }
     };
@@ -145,21 +143,21 @@ async function getHomePage() {
       if (historyIndex < historyStack.length - 1) {
         historyIndex++;
         const url = historyStack[historyIndex];
-        frame.src = `/proxy?url=${encodeURIComponent(url)}`;
+        frame.src = "/proxy?url=" + encodeURIComponent(url);
         urlBar.value = url;
       }
     };
     document.getElementById("reload").onclick = () => {
       if (historyIndex >= 0) {
         const url = historyStack[historyIndex];
-        frame.src = `/proxy?url=${encodeURIComponent(url)}`;
+        frame.src = "/proxy?url=" + encodeURIComponent(url);
       }
     };
     document.getElementById("popout").onclick = () => {
       if (historyIndex >= 0) {
         const url = historyStack[historyIndex];
         const popup = window.open("about:blank", "_blank");
-        popup.document.write(`<iframe src='/proxy?url=${encodeURIComponent(url)}' style='width:100%;height:100vh;border:none;'></iframe>`);
+        popup.document.write("<iframe src='/proxy?url=" + encodeURIComponent(url) + "' style='width:100%;height:100vh;border:none;'></iframe>");
       }
     };
     urlBar.addEventListener("keypress", e => {
