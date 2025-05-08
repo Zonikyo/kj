@@ -23,19 +23,17 @@ export default {
           let html = await response.text();
           const base = new URL(target).origin;
 
-          // Rewrite relative and absolute links
-          html = html.replace(/(href|src)=["'](.*?)["']/g, (match, attr, val) => {
-            if (val.startsWith("http") || val.startsWith("/proxy")) return match;
-            const resolved = new URL(val, target).toString();
-            return `${attr}="/proxy?url=${encodeURIComponent(resolved)}"`;
+          // Rewrite all href/src/form/etc attributes
+          html = html.replace(/(href|src|action)=["'](.*?)["']/gi, (match, attr, val) => {
+            if (val.startsWith("data:")) return match;
+            const absolute = new URL(val, target).toString();
+            return `${attr}="/proxy?url=${encodeURIComponent(absolute)}"`;
           });
 
-          html = html.replace(/<a[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>/g, (match, href) => {
-            return match.replace(href, `/proxy?url=${encodeURIComponent(href)}`);
-          });
-
-          html = html.replace(/<iframe[^>]*src=["'](https?:\/\/[^"']+)["'][^>]*>/g, (match, src) => {
-            return match.replace(src, `/proxy?url=${encodeURIComponent(src)}`);
+          // Rewrite JavaScript-driven navigation
+          html = html.replace(/window\.location\.href\s*=\s*['"](.*?)['"]/g, (match, val) => {
+            const absolute = new URL(val, target).toString();
+            return `window.location.href='/proxy?url=${encodeURIComponent(absolute)}'`;
           });
 
           return new Response(html, {
@@ -104,12 +102,12 @@ async function getHomePage() {
 </head>
 <body>
   <div class="toolbar">
-    <button id="back">⬅️</button>
-    <button id="forward">➡️</button>
-    <button id="reload">🔄</button>
+    <button id="back">Back</button>
+    <button id="forward">Forward</button>
+    <button id="reload">Reload</button>
     <input type="text" id="urlBar" placeholder="Enter URL or search...">
     <button id="go">Go</button>
-    <button id="popout">🧾</button>
+    <button id="popout">Open</button>
   </div>
   <iframe id="frame"></iframe>
 
