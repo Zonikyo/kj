@@ -22,10 +22,15 @@ export default {
           let html = await fetchedResponse.text();
           const base = new URL(target).origin;
 
-          html = html.replace(/\b(href|src|action)=([\"'])(.*?)\2/gi, (match, attr, quote, val) => {
+          html = html.replace(/\b(href|src|action)=([\"'])(.*?)([\"'])/gi, (match, attr, quote1, val, quote2) => {
             if (val.startsWith("data:")) return match;
             const absolute = new URL(val, target).toString();
-            return `${attr}=${quote}/proxy?url=${encodeURIComponent(absolute)}${quote}`;
+            return `${attr}=${quote1}/proxy?url=${encodeURIComponent(absolute)}${quote2}`;
+          });
+
+          html = html.replace(/<iframe[^>]*src=(["'])(.*?)\1/gi, (match, quote, src) => {
+            const absolute = new URL(src, target).toString();
+            return match.replace(src, `/proxy?url=${encodeURIComponent(absolute)}`);
           });
 
           if (!/<base /i.test(html)) {
@@ -112,7 +117,12 @@ async function getHomePage() {
     let historyIndex = -1;
 
     function isURL(str) {
-      try { new URL(str); return true; } catch { return false; }
+      try {
+        const url = new URL(str);
+        return url.protocol.startsWith("http");
+      } catch {
+        return false;
+      }
     }
 
     function toURL(input) {
