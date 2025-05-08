@@ -36,6 +36,9 @@ export default {
             return `window.location.href='/proxy?url=${encodeURIComponent(absolute)}'`;
           });
 
+          // Inject a base tag to fix relative paths
+          html = html.replace(/<head>/i, `<head><base href="${base}/">`);
+
           return new Response(html, {
             headers: { "Content-Type": "text/html" },
           });
@@ -167,6 +170,21 @@ async function getHomePage() {
 
     urlBar.addEventListener('keypress', e => {
       if (e.key === 'Enter') goTo(urlBar.value);
+    });
+
+    const observer = new MutationObserver(() => {
+      try {
+        const current = frame.contentWindow.location.href;
+        if (!current.startsWith(location.origin + "/proxy?url=")) {
+          updateFrame(current);
+        }
+      } catch (e) {}
+    });
+
+    frame.addEventListener('load', () => {
+      observer.disconnect();
+      const doc = frame.contentDocument || frame.contentWindow.document;
+      observer.observe(doc, { childList: true, subtree: true });
     });
   </script>
 </body>
