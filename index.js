@@ -16,51 +16,47 @@ export default {
       }
 
       try {
-        const response = await fetch(target);
-        const contentType = response.headers.get("content-type");
+        const fetchedResponse = await fetch(target);
+        const contentType = fetchedResponse.headers.get("content-type") || "";
 
-        if (contentType && contentType.includes("text/html")) {
-          let html = await response.text();
+        if (contentType.includes("text/html")) {
+          let html = await fetchedResponse.text();
           const base = new URL(target).origin;
 
-          // Rewrite all href/src/form/etc attributes
-          html = html.replace(/(href|src|action)=["'](.*?)["']/gi, (match, attr, val) => {
+          // Rewrite all href/src/action attributes to go through the proxy
+          html = html.replace(/\b(href|src|action)=(["'])(.*?)\2/gi, (match, attr, quote, val) => {
             if (val.startsWith("data:")) return match;
             const absolute = new URL(val, target).toString();
-            return `${attr}="/proxy?url=${encodeURIComponent(absolute)}"`;
+            return `${attr}=${quote}/proxy?url=${encodeURIComponent(absolute)}${quote}`;
           });
 
-          // Rewrite JavaScript-driven navigation
-          html = html.replace(/window\.location\.href\s*=\s*['"](.*?)['"]/g, (match, val) => {
-            const absolute = new URL(val, target).toString();
-            return `window.location.href='/proxy?url=${encodeURIComponent(absolute)}'`;
-          });
-
-          // Inject a base tag to fix relative paths
-          html = html.replace(/<head>/i, `<head><base href="${base}/">`);
+          // Inject base tag and meta charset if needed
+          if (!/<base /i.test(html)) {
+            html = html.replace(/<head.*?>/, (match) => `${match}<base href="${base}/">`);
+          }
+          if (!/<meta charset/i.test(html)) {
+            html = html.replace(/<head.*?>/, (match) => `${match}<meta charset="UTF-8">`);
+          }
 
           return new Response(html, {
-            headers: { "Content-Type": "text/html" },
+            headers: { "Content-Type": "text/html; charset=UTF-8" },
           });
         }
 
-        return new Response(response.body, {
-          headers: { "Content-Type": contentType || "application/octet-stream" },
+        return new Response(fetchedResponse.body, {
+          headers: { "Content-Type": contentType },
         });
-
       } catch (e) {
-        return new Response("Error fetching site: " + e.message, { status: 500 });
+        return new Response(`Error: ${e.message}`, { status: 500 });
       }
     }
 
     return new Response("404 Not Found", { status: 404 });
-  }
+  },
 };
 
-// Homepage UI
 async function getHomePage() {
-  return `
-<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html>
 <head>
   <title>Cloudflare Proxy Browser</title>
@@ -68,38 +64,36 @@ async function getHomePage() {
   <style>
     body {
       margin: 0;
-      font-family: 'Segoe UI', sans-serif;
+      font-family: system-ui, sans-serif;
       background: #1e1e2f;
-      color: #fff;
+      color: white;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      height: 100vh;
     }
     .toolbar {
       display: flex;
-      align-items: center;
-      background: #2c2c3c;
-      padding: 0.5rem;
       gap: 0.5rem;
+      padding: 0.5rem;
+      background: #2d2d3a;
+    }
+    .toolbar button, .toolbar input {
+      border: none;
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
     }
     .toolbar button {
       background: #444;
-      color: #fff;
-      border: none;
-      padding: 0.5rem 1rem;
+      color: white;
       cursor: pointer;
-      border-radius: 5px;
     }
     .toolbar input {
       flex: 1;
-      padding: 0.5rem;
-      border: none;
-      border-radius: 5px;
     }
     iframe {
       flex: 1;
-      border: none;
       width: 100%;
+      border: none;
     }
   </style>
 </head>
@@ -108,83 +102,68 @@ async function getHomePage() {
     <button id="back">Back</button>
     <button id="forward">Forward</button>
     <button id="reload">Reload</button>
-    <input type="text" id="urlBar" placeholder="Enter URL or search...">
+    <input id="urlBar" placeholder="Enter URL or search term">
     <button id="go">Go</button>
     <button id="popout">Open</button>
   </div>
   <iframe id="frame"></iframe>
-
   <script>
-    const frame = document.getElementById('frame');
-    const urlBar = document.getElementById('urlBar');
+    const frame = document.getElementById("frame");
+    const urlBar = document.getElementById("urlBar");
     const historyStack = [];
     let historyIndex = -1;
 
-    function toUrl(input) {
-      try {
-        return new URL(input).toString();
-      } catch {
-        return 'https://duckduckgo.com/?q=' + encodeURIComponent(input);
-      }
+    function isURL(str) {
+      try { new URL(str); return true; } catch { return false; }
     }
 
-    function updateFrame(url) {
-      const proxied = '/proxy?url=' + encodeURIComponent(url);
-      frame.src = proxied;
-      urlBar.value = url;
+    function toURL(input) {
+      if (isURL(input)) return input;
+      return `https://duckduckgo.com/?q=${encodeURIComponent(input)}`;
     }
 
     function goTo(input) {
-      const url = toUrl(input);
-      updateFrame(url);
+      const url = toURL(input);
+      const proxied = `/proxy?url=${encodeURIComponent(url)}`;
+      frame.src = proxied;
       historyStack.splice(historyIndex + 1);
       historyStack.push(url);
       historyIndex++;
+      urlBar.value = url;
     }
 
-    document.getElementById('go').onclick = () => goTo(urlBar.value);
-    document.getElementById('back').onclick = () => {
+    document.getElementById("go").onclick = () => goTo(urlBar.value);
+    document.getElementById("back").onclick = () => {
       if (historyIndex > 0) {
         historyIndex--;
-        updateFrame(historyStack[historyIndex]);
+        const url = historyStack[historyIndex];
+        frame.src = `/proxy?url=${encodeURIComponent(url)}`;
+        urlBar.value = url;
       }
     };
-    document.getElementById('forward').onclick = () => {
+    document.getElementById("forward").onclick = () => {
       if (historyIndex < historyStack.length - 1) {
         historyIndex++;
-        updateFrame(historyStack[historyIndex]);
+        const url = historyStack[historyIndex];
+        frame.src = `/proxy?url=${encodeURIComponent(url)}`;
+        urlBar.value = url;
       }
     };
-    document.getElementById('reload').onclick = () => {
+    document.getElementById("reload").onclick = () => {
       if (historyIndex >= 0) {
-        updateFrame(historyStack[historyIndex]);
+        const url = historyStack[historyIndex];
+        frame.src = `/proxy?url=${encodeURIComponent(url)}`;
       }
     };
-    document.getElementById('popout').onclick = () => {
+    document.getElementById("popout").onclick = () => {
       if (historyIndex >= 0) {
-        const proxied = '/proxy?url=' + encodeURIComponent(historyStack[historyIndex]);
-        const win = window.open('about:blank', '_blank');
-        win.document.write('<iframe src="' + proxied + '" style="width:100%;height:100vh;border:none;"></iframe>');
+        const url = historyStack[historyIndex];
+        const popup = window.open("about:blank", "_blank");
+        popup.document.write(`<iframe src='/proxy?url=${encodeURIComponent(url)}' style='width:100%;height:100vh;border:none;'></iframe>`);
       }
     };
-
-    urlBar.addEventListener('keypress', e => {
-      if (e.key === 'Enter') goTo(urlBar.value);
-    });
-
-    const observer = new MutationObserver(() => {
-      try {
-        const current = frame.contentWindow.location.href;
-        if (!current.startsWith(location.origin + "/proxy?url=")) {
-          updateFrame(current);
-        }
-      } catch (e) {}
-    });
-
-    frame.addEventListener('load', () => {
-      observer.disconnect();
-      const doc = frame.contentDocument || frame.contentWindow.document;
-      observer.observe(doc, { childList: true, subtree: true });
+    urlBar.addEventListener("keypress", e => {
+      if (e.key === "Enter") goTo(urlBar.value);
     });
   </script>
 </body>
